@@ -25,7 +25,7 @@ const app     = express();
 // Nilai ini JANGAN ditulis langsung di sini.
 // Isi melalui fitur "Variables" di Railway (lihat README).
 const SOCIALBUZZ_SECRET = process.env.SOCIALBUZZ_SECRET || 'sbwhook-wda4ocnahy9odjklpwrt7et0';
-const ROBLOX_API_KEY    = process.env.ROBLOX_API_KEY    || 'RoJjjqShC02B2nuLG8VaehAkh/E5KHZAeLKYz38xa7Ym3hXKZXlKaGJHY2lPaUpTVXpJMU5pSXNJbXRwWkNJNkluTnBaeTB5TURJeExUQTNMVEV6VkRFNE9qVXhPalE1V2lJc0luUjVjQ0k2SWtwWFZDSjkuZXlKaGRXUWlPaUpTYjJKc2IzaEpiblJsY201aGJDSXNJbWx6Y3lJNklrTnNiM1ZrUVhWMGFHVnVkR2xqWVhScGIyNVRaWEoyYVdObElpd2lZbUZ6WlVGd2FVdGxlU0k2SWxKdlNtcHFjVk5vUXpBeVFqSnVkVXhIT0ZaaFpXaEJhMmd2UlRWTFNGcEJaVXhMV1hvek9IaGhOMWx0TTJoWVN5SXNJbTkzYm1WeVNXUWlPaUk1TlRFd056STVPVEkySWl3aVpYaHdJam94TnpjeU56RXlNemt5TENKcFlYUWlPakUzTnpJM01EZzNPVElzSW01aVppSTZNVGMzTWpjd09EYzVNbjAuS2Q3WXBWak5WaFZ6allkc0NoUExxeFZMcG9XZ3hQLW02MlNpMERucURlMzBqeWlxTjVLX29PSmhPVWRoVTdZYzJoaFJYb1NROTBXVnAxMlV3c0hNblZKRjh1MlpDVmVQSGpocmhLSmg4TDV6eEdVbmFqX1BDVmxwQmQ0Q0dobGprNFVIVjA2b1ZsY0Z0VXRUZHd4c3ZlTTZWM3EyWnRWMHkwdlJhQ2J4amc2SmQ4ZGtWY0RxNUlBLURZcXd0b3hSQ21uSGpKVHN4RllyeE1JZnNvREdXZTRxWHdtYWZPV3FVdHFEUDNab21tLUQxYWpfbVFZRWFmSzF1Ymo0dUZSc3FhWnB6QzN1RHdWdzRndXZ6anRFdkRsckVsRFVHYnNhZkZPRkw5eXZDY01OV3FyMDlFb0pURXExblpiUHVjcWNTa2dkdXdWdUVhTzhpdGg0bGwtc2ZB';
+const ROBLOX_API_KEY    = process.env.ROBLOX_API_KEY    || 'MOUNTGRIVELA_3698754210.Aa#@_2026';
 
 // ── Antrian donasi (tersimpan di memori) ──────────────────
 // Maksimal 500 item agar tidak memenuhi RAM
@@ -144,3 +144,4 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
 	console.log(`🚀 Server middleware berjalan di port ${PORT}`);
 });
+
