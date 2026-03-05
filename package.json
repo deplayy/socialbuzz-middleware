@@ -1,7 +1,7 @@
 {
   "name"       : "socialbuzz-roblox-middleware",
   "version"    : "1.0.0",
-  "description": "Server jembatan antara SocialBuzz dan Roblox",
+  "description": "Middleware SocialBuzz → Roblox Leaderboard",
   "main"       : "server.js",
   "scripts": {
     "start": "node server.js",
