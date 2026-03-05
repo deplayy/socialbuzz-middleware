@@ -1,108 +1,146 @@
 // ============================================================
-//  MIDDLEWARE  —  SocialBuzz → Roblox
-//  Deploy: Railway / Render / VPS  |  Node.js >= 18
-//  npm install  →  npm start
+//  server.js  —  Middleware SocialBuzz → Roblox
+//
+//  Tugas server ini:
+//  1. Menerima notifikasi (webhook) dari SocialBuzz
+//     setiap kali ada donasi yang berhasil dibayar
+//  2. Menyimpan donasi ke dalam antrian sementara
+//  3. Memberikan data antrian itu ke Roblox yang
+//     datang mengambil (polling) setiap beberapa detik
+//
+//  CATATAN PENTING:
+//  Nama yang dipakai untuk mencocokkan pemain Roblox
+//  adalah nama yang tertera di akun SocialBuzz donatur
+//  (donor.name). Tidak ada field tambahan di form.
+//
+//  Deploy di: Railway (railway.app) — GRATIS
+//  Node.js versi 18 ke atas
 // ============================================================
 
-const express = require("express");
-const crypto  = require("crypto");
+const express = require('express');
+const crypto  = require('crypto');
 const app     = express();
 
-// ── ENV (isi di hosting kamu, jangan hardcode) ────────────
-const SOCIALBUZZ_SECRET = process.env.SOCIALBUZZ_SECRET || "GANTI_SECRET_SOCIALBUZZ";
-const ROBLOX_API_KEY    = process.env.ROBLOX_API_KEY    || "GANTI_KEY_ROBLOX_SERVER";
+// ── Konfigurasi dari Environment Variable ────────────────
+// Nilai ini JANGAN ditulis langsung di sini.
+// Isi melalui fitur "Variables" di Railway (lihat README).
+const SOCIALBUZZ_SECRET = process.env.SOCIALBUZZ_SECRET || 'sbwhook-wda4ocnahy9odjklpwrt7et0';
+const ROBLOX_API_KEY    = process.env.ROBLOX_API_KEY    || 'RoJjjqShC02B2nuLG8VaehAkh/E5KHZAeLKYz38xa7Ym3hXKZXlKaGJHY2lPaUpTVXpJMU5pSXNJbXRwWkNJNkluTnBaeTB5TURJeExUQTNMVEV6VkRFNE9qVXhPalE1V2lJc0luUjVjQ0k2SWtwWFZDSjkuZXlKaGRXUWlPaUpTYjJKc2IzaEpiblJsY201aGJDSXNJbWx6Y3lJNklrTnNiM1ZrUVhWMGFHVnVkR2xqWVhScGIyNVRaWEoyYVdObElpd2lZbUZ6WlVGd2FVdGxlU0k2SWxKdlNtcHFjVk5vUXpBeVFqSnVkVXhIT0ZaaFpXaEJhMmd2UlRWTFNGcEJaVXhMV1hvek9IaGhOMWx0TTJoWVN5SXNJbTkzYm1WeVNXUWlPaUk1TlRFd056STVPVEkySWl3aVpYaHdJam94TnpjeU56RXlNemt5TENKcFlYUWlPakUzTnpJM01EZzNPVElzSW01aVppSTZNVGMzTWpjd09EYzVNbjAuS2Q3WXBWak5WaFZ6allkc0NoUExxeFZMcG9XZ3hQLW02MlNpMERucURlMzBqeWlxTjVLX29PSmhPVWRoVTdZYzJoaFJYb1NROTBXVnAxMlV3c0hNblZKRjh1MlpDVmVQSGpocmhLSmg4TDV6eEdVbmFqX1BDVmxwQmQ0Q0dobGprNFVIVjA2b1ZsY0Z0VXRUZHd4c3ZlTTZWM3EyWnRWMHkwdlJhQ2J4amc2SmQ4ZGtWY0RxNUlBLURZcXd0b3hSQ21uSGpKVHN4RllyeE1JZnNvREdXZTRxWHdtYWZPV3FVdHFEUDNab21tLUQxYWpfbVFZRWFmSzF1Ymo0dUZSc3FhWnB6QzN1RHdWdzRndXZ6anRFdkRsckVsRFVHYnNhZkZPRkw5eXZDY01OV3FyMDlFb0pURXExblpiUHVjcWNTa2dkdXdWdUVhTzhpdGg0bGwtc2ZB';
 
-// ── Antrian donasi in-memory (max 500) ────────────────────
-let queue = [];
+// ── Antrian donasi (tersimpan di memori) ──────────────────
+// Maksimal 500 item agar tidak memenuhi RAM
+let donationQueue = [];
 
-// ── Verifikasi HMAC SHA-256 dari SocialBuzz ───────────────
-function verifyHmac(rawBody, sigHeader) {
-  try {
-    const expected = crypto
-      .createHmac("sha256", SOCIALBUZZ_SECRET)
-      .update(rawBody)
-      .digest("hex");
-    return crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(sigHeader));
-  } catch {
-    return false;
-  }
+// ── Fungsi verifikasi tanda tangan dari SocialBuzz ────────
+function verifySignature(rawBody, signatureFromHeader) {
+	try {
+		const expected = crypto
+			.createHmac('sha256', SOCIALBUZZ_SECRET)
+			.update(rawBody)
+			.digest('hex');
+		return crypto.timingSafeEqual(
+			Buffer.from(expected),
+			Buffer.from(signatureFromHeader)
+		);
+	} catch {
+		return false;
+	}
 }
 
-function formatIDR(n) {
-  return new Intl.NumberFormat("id-ID", {
-    style: "currency", currency: "IDR", minimumFractionDigits: 0
-  }).format(n);
+// ── Fungsi format angka ke Rupiah ─────────────────────────
+function formatRupiah(angka) {
+	return new Intl.NumberFormat('id-ID', {
+		style              : 'currency',
+		currency           : 'IDR',
+		minimumFractionDigits: 0,
+	}).format(angka);
 }
 
-// ── POST /webhook/socialbuzz ──────────────────────────────
-// Daftarkan URL ini di dashboard SocialBuzz → Webhook:
-//   https://DOMAIN_KAMU/webhook/socialbuzz
-//
-// Payload yang dikirim SocialBuzz:
-// {
-//   "transaction": { "id": "...", "status": "settlement", "amount": 50000 },
-//   "donor":       { "name": "Budi", "roblox_user": "BudiRoblox" },
-//   "message":     "Semangat!"
-// }
-// Header: x-socialbuzz-signature: <hmac-sha256-hex>
+// ══════════════════════════════════════════════════════════
+//  ENDPOINT 1: Menerima Webhook dari SocialBuzz
+//  Method : POST
+//  URL    : https://DOMAIN_KAMU/webhook/socialbuzz
+// ══════════════════════════════════════════════════════════
+app.post(
+	'/webhook/socialbuzz',
+	express.raw({ type: '*/*' }),
+	(req, res) => {
+		const signature = req.headers['x-socialbuzz-signature'] || '';
 
-app.post("/webhook/socialbuzz", express.raw({ type: "*/*" }), (req, res) => {
-  const sig = req.headers["x-socialbuzz-signature"] || "";
+		if (!verifySignature(req.body, signature)) {
+			console.warn('❌ Webhook ditolak: tanda tangan tidak valid');
+			return res.status(401).json({ error: 'Unauthorized' });
+		}
 
-  if (!verifyHmac(req.body, sig)) {
-    console.warn("❌ Signature tidak valid");
-    return res.status(401).json({ error: "Unauthorized" });
-  }
+		let payload;
+		try {
+			payload = JSON.parse(req.body.toString('utf8'));
+		} catch {
+			return res.status(400).json({ error: 'Format JSON tidak valid' });
+		}
 
-  let payload;
-  try {
-    payload = JSON.parse(req.body.toString("utf8"));
-  } catch {
-    return res.status(400).json({ error: "Invalid JSON" });
-  }
+		const trx = payload.transaction || {};
 
-  const trx = payload.transaction || {};
+		// Hanya proses donasi yang statusnya "settlement"
+		if (trx.status !== 'settlement') {
+			console.log('ℹ️ Webhook diabaikan, status:', trx.status);
+			return res.status(200).json({ message: 'Diabaikan: status ' + trx.status });
+		}
 
-  // Hanya proses donasi yang sudah settlement (berhasil dibayar)
-  if (trx.status !== "settlement") {
-    return res.status(200).json({ message: "Ignored: " + trx.status });
-  }
+		const amount = parseInt(trx.amount) || 0;
 
-  const amount = parseInt(trx.amount) || 0;
-  const item = {
-    id         : String(trx.id || Date.now()),
-    donorName  : payload.donor?.name        || "Anonim",
-    robloxUser : payload.donor?.roblox_user || "",
-    amount,
-    amountStr  : formatIDR(amount),
-    message    : String(payload.message || ""),
-    timestamp  : Date.now(),
-  };
+		// ── Nama SocialBuzz langsung dipakai sebagai username Roblox ──
+		// Donatur cukup mendaftarkan nama mereka di SocialBuzz
+		// dengan nama yang sama seperti username Roblox mereka.
+		// Tidak ada field tambahan yang perlu diisi saat donasi.
+		const donorName = payload.donor?.name || 'Anonim';
 
-  queue.push(item);
-  if (queue.length > 500) queue.shift();
+		const donationItem = {
+			id        : String(trx.id || Date.now()),
+			donorName : donorName,
+			robloxUser: donorName,   // ← langsung pakai nama SocialBuzz
+			amount    : amount,
+			amountStr : formatRupiah(amount),
+			message   : String(payload.message || ''),
+			timestamp : Date.now(),
+		};
 
-  console.log(`✅ ${item.donorName} (${item.robloxUser}) → ${item.amountStr}`);
-  return res.status(200).json({ message: "OK" });
+		donationQueue.push(donationItem);
+		if (donationQueue.length > 500) donationQueue.shift();
+
+		console.log(`✅ Donasi masuk: ${donationItem.donorName} → ${donationItem.amountStr}`);
+		return res.status(200).json({ message: 'OK' });
+	}
+);
+
+// ══════════════════════════════════════════════════════════
+//  ENDPOINT 2: Diakses oleh Roblox untuk mengambil donasi
+//  Method : GET
+//  URL    : https://DOMAIN_KAMU/donations/poll
+//  Header : x-roblox-key: (nilai ROBLOX_API_KEY kamu)
+// ══════════════════════════════════════════════════════════
+app.get('/donations/poll', (req, res) => {
+	const key = req.headers['x-roblox-key'] || '';
+
+	if (key !== ROBLOX_API_KEY) {
+		console.warn('❌ Poll ditolak: API key salah');
+		return res.status(401).json({ error: 'Unauthorized' });
+	}
+
+	const batch = donationQueue.splice(0, 10);
+	return res.status(200).json({ donations: batch });
 });
 
-// ── GET /donations/poll ───────────────────────────────────
-// Dipanggil oleh Roblox server setiap beberapa detik.
-// Header: x-roblox-key: ROBLOX_API_KEY
-// Response: { "donations": [ ...max 10... ] }
-// Item yang dikirim langsung dihapus dari antrian.
-
-app.get("/donations/poll", (req, res) => {
-  if ((req.headers["x-roblox-key"] || "") !== ROBLOX_API_KEY) {
-    return res.status(401).json({ error: "Unauthorized" });
-  }
-  const batch = queue.splice(0, 10);
-  return res.status(200).json({ donations: batch });
+// ══════════════════════════════════════════════════════════
+//  ENDPOINT 3: Health check
+//  Buka URL ini di browser → harus muncul "Middleware OK 🟢"
+// ══════════════════════════════════════════════════════════
+app.get('/', (_, res) => {
+	res.send('Middleware OK 🟢');
 });
 
-// ── Health check ──────────────────────────────────────────
-app.get("/", (_, res) => res.send("Middleware OK 🟢"));
-
-// ── Start ─────────────────────────────────────────────────
+// ── Jalankan Server ───────────────────────────────────────
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`🚀 Listening on port ${PORT}`));
+app.listen(PORT, () => {
+	console.log(`🚀 Server middleware berjalan di port ${PORT}`);
+});
